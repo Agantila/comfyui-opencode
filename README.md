@@ -41,6 +41,20 @@ Each call writes an agent definition into a reusable workspace and runs
 Workspace: `~/.cache/comfyui-opencode/workspace` (override with `OPENCODE_WORKSPACE`).
 Binary override: `OPENCODE_BIN`.
 
+## Layout (why the files sit flat)
+
+ComfyUI loads a custom node directory by calling
+`importlib.util.spec_from_file_location(<path>, "<dir>/__init__.py")` and sets the module name
+to the *path* with dots escaped — e.g. `custom_nodes/comfyui-opencode`. That name contains a
+slash, so relative imports into a sub-package (`from .nodes import ...`) fail with
+`ModuleNotFoundError: No module named 'custom_nodes/comfyui-opencode.nodes'`.
+
+Consequences, both load-bearing:
+
+* everything is flat next to `__init__.py`, there is no `comfyui_opencode/` package folder;
+* the node module is called `opencode_nodes.py`, **not** `nodes.py`, because ComfyUI puts its
+  own `nodes` module on `sys.path` and a flat `import nodes` would resolve to that instead.
+
 ## opencode v2 pitfalls this node works around
 
 These are not documented and cost significant debugging time. If the integration ever

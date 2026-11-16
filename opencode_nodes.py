@@ -1,13 +1,13 @@
-from . import client as _client
+from comfy_api.latest import io
+
+import client
 
 
-class OpenCodePromptNode:
+class OpenCodePromptNode(io.ComfyNode):
     """ComfyUI V3 node that runs a prompt through the local opencode CLI."""
 
     @classmethod
     def define_schema(cls):
-        from comfy_api.latest import io
-
         return io.Schema(
             node_id="OpenCodePrompt",
             display_name="OpenCode Prompt",
@@ -17,7 +17,7 @@ class OpenCodePromptNode:
                 "model and system prompt. Returns the assistant text."
             ),
             inputs=[
-                io.Combo.Input("model", options=_client.list_models()),
+                io.Combo.Input("model", options=client.list_models()),
                 io.String.Input("prompt", multiline=True, default=""),
                 io.String.Input("system_prompt", multiline=True, default=""),
                 io.Int.Input("timeout", default=300, min=1, max=3600),
@@ -26,10 +26,8 @@ class OpenCodePromptNode:
         )
 
     @classmethod
-    def execute(cls, model, prompt, system_prompt, timeout):
-        from comfy_api.latest import io
-
-        text = _client.run_prompt(
+    def execute(cls, model, prompt, system_prompt, timeout) -> io.NodeOutput:
+        text = client.run_prompt(
             prompt=prompt,
             system_prompt=system_prompt,
             model=model,

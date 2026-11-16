@@ -10,7 +10,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from comfyui_opencode import client  # noqa: E402
+import client  # noqa: E402
 
 MODEL = sys.argv[1] if len(sys.argv) > 1 else "deepseek/deepseek-flash"
 SYSTEM = "Antworte ausschliesslich in GROSSBUCHSTABEN und beende mit ZEBRA."

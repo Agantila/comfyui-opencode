@@ -93,6 +93,50 @@ gehend Großbuchstaben).
 Node-Load über `define_schema()`: 108 Modelle in der Combo, 4 Inputs, 1 Output.
 `execute()` liefert einen brauchbaren englischen Bildprompt aus einem deutschen Input.
 
+### Phase 7 — Die Node erschien nicht in ComfyUI
+
+Beim Nutzer war die Node in der Oberfläche nicht auffindbar. Das Log zeigte:
+
+```
+Cannot import .../custom_nodes/comfyui-opencode module for custom nodes:
+No module named '/home/deniz/ComfyUI/custom_nodes/comfyui-opencode.nodes'
+IMPORT FAILED: /home/deniz/ComfyUI/custom_nodes/comfyui-opencode
+```
+
+Alle Tests bis hierher liefen mit einem selbstgebauten Import (`submodule_search_locations`
+gesetzt, teils mit gestubbtem `comfy_aimdo`) — also **nicht** mit ComfyUIs echtem Loader. Das
+war der Fehler in der Verifikation: ich habe den Node-Load simuliert statt ihn auszulösen.
+
+Drei echte Fehler, nacheinander sichtbar:
+
+**7.1 — Relative Imports scheitern.** ComfyUI lädt ein Node-Verzeichnis mit
+`spec_from_file_location(<path>, "<dir>/__init__.py")`, wobei der Modulname der Pfad mit
+escapten Punkten ist (`custom_nodes/comfyui-opencode`). Dieser Name enthält einen
+Schrägstrich, daher kann `from .nodes import …` nicht auflösen.
+Lösung: flaches Layout, kein Unterpaket.
+
+**7.2 — `nodes.py` kollidiert mit ComfyUIs eigenem Modul.** Nach dem Flachlegen hieß die
+Node-Datei `nodes.py`; `import nodes` traf ComfyUIs eigenes `nodes`-Modul
+(`module 'nodes' has no attribute 'OpenCodePromptNode'`).
+Lösung: Datei heißt `opencode_nodes.py`.
+
+**7.3 — Falsche Basisklasse.** Nach dem Import meldete ComfyUI
+`type object 'OpenCodePromptNode' has no attribute 'GET_SCHEMA'` — die Klasse erbte nicht von
+`io.ComfyNode`.
+Lösung: `class OpenCodePromptNode(io.ComfyNode)`.
+
+Verifikation danach **mit ComfyUIs echtem Loader** (`init_extra_nodes()` in der venv
+`comfy714`):
+
+```
+ERFOLG: registriert -> custom_nodes.comfyui-opencode
+Display: OpenCode Prompt
+EXECUTE OK: 'A cozy domestic photograph of a fluffy gray tabby cat ...'
+```
+
+**Lehre für künftige Nodes:** Immer `init_extra_nodes()` in der ComfyUI-venv aufrufen und
+`NODE_CLASS_MAPPINGS` prüfen. Ein Import-Test mit eigener `spec`-Konstruktion beweist nichts.
+
 ## Architekturentscheidungen
 
 **Fester Workspace statt Temp-Verzeichnis.** Jeder Lauf ein `mkdtemp` hätte pro ComfyUI-
