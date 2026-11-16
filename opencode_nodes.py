@@ -14,23 +14,31 @@ class OpenCodePromptNode(io.ComfyNode):
             category="opencode",
             description=(
                 "Runs a prompt through the local opencode CLI, using a selectable "
-                "model and system prompt. Returns the assistant text."
+                "model, system prompt and seed. Returns the assistant text."
             ),
             inputs=[
                 io.Combo.Input("model", options=client.list_models()),
                 io.String.Input("prompt", multiline=True, default=""),
                 io.String.Input("system_prompt", multiline=True, default=""),
+                io.Int.Input(
+                    "seed",
+                    default=0,
+                    min=-1,
+                    max=0xFFFFFFFF,
+                    control_after_generate=True,
+                ),
                 io.Int.Input("timeout", default=300, min=1, max=3600),
             ],
             outputs=[io.String.Output(display_name="text")],
         )
 
     @classmethod
-    def execute(cls, model, prompt, system_prompt, timeout) -> io.NodeOutput:
+    def execute(cls, model, prompt, system_prompt, seed, timeout) -> io.NodeOutput:
         text = client.run_prompt(
             prompt=prompt,
             system_prompt=system_prompt,
             model=model,
             timeout=timeout,
+            seed=seed,
         )
         return io.NodeOutput(text)

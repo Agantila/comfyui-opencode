@@ -168,6 +168,45 @@ EXECUTE OK: "A cozy domestic scene: a fluffy orange tabby cat ..."
 **Lehre:** Umgebungstests immer mit dem PATH/Env des laufenden ComfyUI-Prozesses fahren
 (`/proc/<pid>/environ`), nicht mit der eigenen Shell. Die eigene Shell hat immer mehr Pfade.
 
+### Phase 9 — Seed als Eingang
+
+Anforderung: den Seed als Node-Eingang mitgeben.
+
+Erster Befund: `opencode run --help` hat **kein** `--seed` und kein `--temperature`. Der
+Provider-Code im Binary baut aber `temperature`, `top_p`, `seed` und `stop` in den Request —
+die Werte kommen aus einem internen Generierungsparameter-Objekt, das opencode selbst nie setzt.
+Die opencode-Doku bestätigt: `seed` ist nicht exponiert, „no config or passthrough".
+
+Zweiter Befund: Die Modell-Konfiguration kennt ein Feld `body` — „JSON fields merged into request
+bodies". Das ist der einzige unterstützte Weg, ein Feld in den rohen Request zu bekommen.
+
+Verifikation des Mechanismus mit einem **Fake-Provider** (kleiner HTTP-Server, der SSE-Antworten
+liefert und den Request-Body mitschreibt):
+
+```json
+{"providers": {"fake": {"settings": {"baseURL": "http://127.0.0.1:4799/v1"},
+                        "models": {"testmodel": {"body": {"seed": 1234}}}}}}
+```
+
+Ergebnis im mitgeschriebenen Body: `seed: 1234` — das Feld kommt wirklich beim Provider an.
+
+Dritter Befund: Der Seed wirkt nur, wenn der Provider ihn unterstützt. Gemessen:
+
+| Modell | Seed 42 | Seed 42 | Seed 7 | Seed 7 | Bewertung |
+|---|---|---|---|---|---|
+| `deepseek/deepseek-flash` | FANTASILO | WOLKENZAHN | — | — | ignoriert den Seed |
+| `ollama/qwen3.5:4b` | Elyvyn | Elyvyn | Aethelgard | Aethelgard | **wirkt** |
+
+Bei Ollama zusätzlich `seed 1234 -> Eldrinth`, also anderer Seed, andere Ausgabe.
+
+Umsetzung: `_split_model_ref()` zerlegt `provider/model#variant` in Provider und Modell-ID
+(Variante wird abgeschnitten, Modell-IDs dürfen weitere Schrägstriche enthalten), `seed` landet
+unter `providers.<provider>.models.<model>.body.seed`. `seed = -1` schreibt den Block gar nicht —
+für Provider, die unbekannte Body-Felder ablehnen.
+
+**Lehre:** Ein Eingang, der beim Standardmodell wirkungslos ist, muss das auch sagen. Deshalb
+steht die Provider-Tabelle im README und `tests/seed.py` prüft das konkrete Modell.
+
 ## Architekturentscheidungen
 
 **Fester Workspace statt Temp-Verzeichnis.** Jeder Lauf ein `mkdtemp` hätte pro ComfyUI-

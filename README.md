@@ -45,6 +45,7 @@ lists is selectable — including models that are only reachable through a local
 | `model` | combo | first available | Populated from `opencode models`, e.g. `deepseek/deepseek-flash`, `ollama/qwen3.5:9b` |
 | `prompt` | string (multiline) | empty | The user prompt |
 | `system_prompt` | string (multiline) | empty | System prompt / role instruction |
+| `seed` | int | 0 | Sampling seed, `-1`–`4294967295`. `-1` sends no seed at all (provider default). Has ComfyUI's usual `control_after_generate` (fixed / increment / decrement / randomize) |
 | `timeout` | int | 300 | Seconds before the call is aborted (1–3600) |
 
 | Output | Type | Description |
@@ -87,7 +88,8 @@ From a local checkout, `./install.sh /path/to/ComfyUI` creates the symlink for y
    comma-separated English prompt. Output only the prompt, no explanation.
    ```
 
-5. Connect the `text` output to a `CLIP Text Encode` node.
+5. Set `seed` if you want reproducible output (see [Seed](#seed)).
+6. Connect the `text` output to a `CLIP Text Encode` node.
 
 `timeout` defaults to 300 seconds. Calls are blocking — for slow models or long prompts, raise it.
 
@@ -100,6 +102,25 @@ From a local checkout, `./install.sh /path/to/ComfyUI` creates the symlink for y
 | `text` output | `A single glossy red apple with a fresh green leaf resting on a rustic wooden table, rich crimson skin with soft highlights, visible wood grain, warm natural light` |
 
 That output is a real result from this node.
+
+## Seed
+
+The `seed` input is written into the provider's raw request body
+(`providers.<provider>.models.<model>.body.seed`), because opencode itself has no seed setting.
+Whether it changes anything is up to the provider:
+
+| Provider | Seed honoured |
+|---|---|
+| Ollama (local) | **Yes** — verified: same seed gave identical answers, a different seed gave a different one |
+| OpenAI-compatible endpoints | Usually yes, when the backend supports `seed` |
+| DeepSeek | **No** — verified: three runs with seed 42 produced three different answers |
+| Anthropic / Claude | No — the Messages API has no seed field |
+
+Because the field is merged blindly into the request body, a provider that rejects unknown fields
+may return an error. Set `seed` to `-1` to send no seed at all and leave the provider at its
+default.
+
+Run `python3 tests/seed.py <provider/model>` to check whether your model honours it.
 
 ## Configuration
 
@@ -166,6 +187,7 @@ __init__.py          ComfyUI entrypoint (comfy_entrypoint)
 opencode_nodes.py    Node definition (V3 schema)
 client.py            opencode CLI wrapper, workspace management
 tests/smoke.py       10-run stability test
+tests/seed.py        verifies the seed reaches and affects the model
 docs/entwicklung.md  Debug history and architecture decisions (German)
 ```
 
