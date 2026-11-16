@@ -1,0 +1,135 @@
+"""Thin wrapper around the opencode CLI."""
+
+import json
+import os
+import shlex
+import shutil
+import subprocess
+
+
+WORKSPACE_ENV = "OPENCODE_WORKSPACE"
+DEFAULT_WORKSPACE = os.path.join(
+    os.path.expanduser("~"), ".cache", "comfyui-opencode", "workspace"
+)
+DEFAULT_TIMEOUT = 300
+AGENT_NAME = "comfyui-runner"
+
+
+def workspace_dir():
+    return os.environ.get(WORKSPACE_ENV) or DEFAULT_WORKSPACE
+
+
+def _binary():
+    binary = os.environ.get("OPENCODE_BIN") or shutil.which("opencode")
+    if not binary:
+        raise RuntimeError(
+            "opencode CLI not found. Install it from https://opencode.ai or set OPENCODE_BIN."
+        )
+    return binary
+
+
+def _run(args, timeout, cwd):
+    # Invoking the CLI directly through subprocess makes opencode fail with
+    # "Agent not found" even though the identical command works from a shell in
+    # the same directory with the same environment. Going through a login shell
+    # is the only invocation form that reliably resolves project-local agents,
+    # so the command is passed as a single shell string with proper quoting.
+    command = " ".join(shlex.quote(part) for part in [_binary(), *args])
+    try:
+        proc = subprocess.run(
+            ["/bin/bash", "-lc", command],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"opencode did not finish within {timeout}s")
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "no output"
+        raise RuntimeError(f"opencode exited with {proc.returncode}: {detail}")
+    return proc.stdout
+
+
+def _write_agent_config(directory, system_prompt):
+    # opencode v2 reads agents from the plural "agents" key. The singular "agent"
+    # key is accepted without error but its entries never register.
+    config = {
+        "$schema": "https://opencode.ai/config.json",
+        "agents": {
+            AGENT_NAME: {
+                "description": "ComfyUI prompt processor",
+                "mode": "primary",
+                "system": system_prompt.strip(),
+            }
+        },
+    }
+    with open(os.path.join(directory, "opencode.json"), "w", encoding="utf-8") as handle:
+        json.dump(config, handle, indent=2, ensure_ascii=False)
+
+
+def ensure_workspace(system_prompt):
+    """Create the reusable workspace, return its path.
+
+    opencode v2 only reads project-local config from a directory it registers as
+    a project. Two conditions must both hold for that registration to carry the
+    configured agent:
+
+    * the directory must be a git repository, otherwise opencode falls back to
+      the "global" project and the local config is never applied;
+    * the repository must contain at least one commit, otherwise the follow-up
+      call still resolves to "global" and `run` fails with "Agent not found".
+
+    The workspace is created once and reused so the project registration stays
+    valid across executions instead of being rebuilt per run.
+    """
+    directory = workspace_dir()
+    os.makedirs(directory, exist_ok=True)
+    _write_agent_config(directory, system_prompt)
+    if not os.path.isdir(os.path.join(directory, ".git")):
+        _git(directory, "init", "--quiet")
+    if _git(directory, "rev-parse", "--verify", "HEAD", check=False).returncode != 0:
+        _git(directory, "add", "-A")
+        _git(
+            directory,
+            "-c", "user.email=comfyui-opencode@localhost",
+            "-c", "user.name=comfyui-opencode",
+            "commit", "--quiet", "-m", "workspace",
+        )
+    return directory
+
+
+def _git(directory, *args, check=True):
+    return subprocess.run(
+        ["git", *args], cwd=directory, capture_output=True, text=True, check=check
+    )
+
+
+def _extract_text(stdout):
+    parts = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        part = event.get("part") or {}
+        if part.get("type") == "text" and part.get("text"):
+            parts.append(part["text"])
+    return "\n".join(parts).strip()
+
+
+def list_models():
+    output = _run(["models"], timeout=60, cwd=os.path.expanduser("~"))
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def run_prompt(prompt, system_prompt, model, timeout=DEFAULT_TIMEOUT):
+    directory = ensure_workspace(system_prompt)
+    args = ["--standalone", "run", "--agent", AGENT_NAME, "--format", "json"]
+    if model:
+        args += ["-m", model]
+    args.append(prompt)
+    return _extract_text(_run(args, timeout=int(timeout), cwd=directory))

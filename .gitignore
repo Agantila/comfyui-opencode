@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# opencode workspace, if someone points OPENCODE_WORKSPACE here
+workspace/
+AGENTS.md
+opencode.json

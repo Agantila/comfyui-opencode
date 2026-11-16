@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-opencode"
+version = "0.1.0"
+description = "ComfyUI node that runs prompts through the local opencode CLI"
+requires-python = ">=3.10"
+
+[project.urls]
+Repository = "https://github.com/dezooyi/comfyui-opencode"
+
+[tool.comfy]
+PublisherId = "dezooyi"
+DisplayName = "comfyui-opencode"
+Icon = ""
