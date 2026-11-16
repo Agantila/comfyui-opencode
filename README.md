@@ -1,36 +1,131 @@
-# comfyui-opencode
+# ComfyUI OpenCode
 
-ComfyUI custom node that pipes a prompt through the local [opencode](https://opencode.ai) CLI.
-You pick the model in ComfyUI, define a system prompt, and get the assistant text back as a
-string you can wire into any prompt input.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![ComfyUI](https://img.shields.io/badge/ComfyUI-custom%20node-blue)](https://github.com/comfyanonymous/ComfyUI)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
-Useful for prompt rewriting, translation, caption expansion, or any text transformation you
-want a configured LLM (including local Ollama models) to perform inside a workflow.
+A ComfyUI custom node that runs your prompt through the [opencode](https://opencode.ai) CLI, so
+any LLM you have configured there — cloud models, local Ollama models, or your own agent setup —
+becomes usable inside a ComfyUI workflow.
 
-## Node
+Pick the model in the node, write a system prompt, get the assistant's text back as a string you
+can wire into any prompt input.
+
+```
+prompt ─────────┐
+system_prompt ──┤──> OpenCode Prompt ──> text ──> CLIP Text Encode / your next node
+model ──────────┘
+```
+
+## Why
+
+Prompt inputs in ComfyUI are static text. This node makes them dynamic: rewrite a rough idea into
+a detailed image prompt, translate on the fly, expand a concept into variations, generate captions,
+or keep style instructions in one place and reuse them across a workflow.
+
+Because it goes through opencode, you are not locked into one provider. Whatever `opencode models`
+lists is selectable — including models that are only reachable through a local CLI setup.
+
+## Features
+
+- **Model selection in the UI** — the combo box is populated from `opencode models`, so it always
+  matches what you actually have configured (108 models on the reference setup).
+- **System prompt as a node input** — the model's role is part of the workflow, not a config file.
+- **Any provider** — cloud models, local Ollama, mixed setups. No extra API keys inside ComfyUI.
+- **String in, string out** — drops into any existing prompt chain without conversion nodes.
+- **Reusable agent workspace** — a prepared opencode workspace persists between runs.
+- **No background service required** — each call runs the CLI standalone.
+
+## Node reference
 
 `OpenCode Prompt` (category `opencode`)
 
-| Input | Type | Description |
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `model` | combo | first available | Populated from `opencode models`, e.g. `deepseek/deepseek-flash`, `ollama/qwen3.5:9b` |
+| `prompt` | string (multiline) | empty | The user prompt |
+| `system_prompt` | string (multiline) | empty | System prompt / role instruction |
+| `timeout` | int | 300 | Seconds before the call is aborted (1–3600) |
+
+| Output | Type | Description |
 |---|---|---|
-| `model` | combo | Populated from `opencode models`, e.g. `deepseek/deepseek-flash`, `ollama/qwen3.5:9b` |
-| `prompt` | string (multiline) | The user prompt |
-| `system_prompt` | string (multiline) | System prompt / role instruction |
-| `timeout` | int | Seconds before the call is aborted, default 300 |
+| `text` | string | The assistant's reply |
 
-| Output | Type |
-|---|---|
-| `text` | string |
+## Requirements
 
-## Install
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) (tested with v0.45.4)
+- [opencode CLI](https://opencode.ai) — installed and logged in (`opencode auth login`)
+- Python 3.10+ (ComfyUI's own environment is fine, no extra packages)
+
+Verify the CLI before installing:
 
 ```bash
-./install.sh /home/deniz/ComfyUI
+opencode --version
+opencode models | head
 ```
 
-Symlinks this repository into `custom_nodes/comfyui-opencode`. Restart ComfyUI afterwards.
+## Installation
 
-Prerequisites: the `opencode` CLI in `PATH` and a logged-in provider (`opencode auth login`).
+```bash
+cd /path/to/ComfyUI/custom_nodes
+git clone https://github.com/Agantila/comfyui-opencode.git
+```
+
+Restart ComfyUI. The node appears under category **`opencode`** as **`OpenCode Prompt`**.
+
+From a local checkout, `./install.sh /path/to/ComfyUI` creates the symlink for you.
+
+## Usage
+
+1. Add `OpenCode Prompt` (right-click canvas → Add Node → opencode → OpenCode Prompt).
+2. Pick a `model` from the dropdown.
+3. Write your `prompt`.
+4. Write a `system_prompt`. Example:
+
+   ```
+   You are a prompt engineer for image generation. Rewrite the user's idea as one detailed,
+   comma-separated English prompt. Output only the prompt, no explanation.
+   ```
+
+5. Connect the `text` output to a `CLIP Text Encode` node.
+
+`timeout` defaults to 300 seconds. Calls are blocking — for slow models or long prompts, raise it.
+
+### Example
+
+| | |
+|---|---|
+| `prompt` | `Ein roter Apfel auf einem Holztisch` |
+| `system_prompt` | `Answer with one comma-separated English image prompt, no explanation.` |
+| `text` output | `A single glossy red apple with a fresh green leaf resting on a rustic wooden table, rich crimson skin with soft highlights, visible wood grain, warm natural light` |
+
+That output is a real result from this node.
+
+## Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OPENCODE_BIN` | auto-detected | Absolute path to the opencode binary |
+| `OPENCODE_WORKSPACE` | `~/.cache/comfyui-opencode/workspace` | Directory for the reusable agent workspace |
+
+## Troubleshooting
+
+**Node does not appear in the UI.** Search ComfyUI's console output for `comfyui-opencode`. If the
+schema cannot be built, the whole node is hidden instead of showing an error in the UI. The most
+common cause is that the opencode CLI is missing from the ComfyUI process's `PATH` — ComfyUI is
+often started from an environment that never sourced your shell rc files. The node searches the
+usual install locations itself (`~/.opencode/bin`, `~/.local/bin`, `~/.bun/bin`, `/usr/local/bin`,
+`/usr/bin`); if that fails, set `OPENCODE_BIN`.
+
+**`Agent not found`.** opencode v2 has undocumented behaviour around project-local agents. The node
+handles it, but it is worth knowing if you adapt the code — see
+[docs/entwicklung.md](docs/entwicklung.md).
+
+**Calls are slow.** Each call starts the CLI fresh; model latency dominates. Use a faster model for
+interactive work.
+
+**Ollama models missing from the dropdown.** The list is read once at node-registration time.
+Restart ComfyUI after pulling a new model.
 
 ## How it works
 
@@ -38,93 +133,62 @@ Each call writes an agent definition into a reusable workspace and runs
 `opencode run --agent comfyui-runner --format json`. The JSON event stream is parsed and the
 `text` parts are concatenated; reasoning blocks and tool events are ignored.
 
-Workspace: `~/.cache/comfyui-opencode/workspace` (override with `OPENCODE_WORKSPACE`).
-Binary override: `OPENCODE_BIN` (absolute path).
+The workspace is a small git repository with one commit, because opencode v2 only reads
+project-local agent configuration from a directory it registers as a project.
 
-### opencode not found
+### opencode v2 pitfalls this node works around
 
-ComfyUI often runs from a shell that never sourced your rc files, so `~/.opencode/bin` is
-missing from the process `PATH` even though `opencode` works in your terminal. The node
-therefore falls back to searching the usual install locations
-(`~/.opencode/bin`, `~/.local/bin`, `~/.bun/bin`, `/usr/local/bin`, `/usr/bin`).
+Undocumented, and each one costs hours if you hit it. Check them in this order after an upgrade.
 
-If it still cannot find the CLI, set the absolute path in the ComfyUI environment:
+1. **Agents live under `agents`, not `agent`.** The singular key is accepted without error and its
+   entries are silently ignored.
+2. **The agent name must not contain underscores.** `comfyui_runner` fails, `comfyui-runner` works.
+3. **The workspace must be a git repository with at least one commit.** Without commits opencode
+   falls back to the `global` project and never applies the local config.
+4. **Call through a login shell.** The identical command through `subprocess` fails 10/10 with
+   `Agent not found` while `/bin/bash -lc` succeeds 10/10. Cause not isolated.
+5. **`--standalone` is required**, otherwise the call attaches to the background service, which
+   ignores `cwd`.
+
+Full detail in [docs/entwicklung.md](docs/entwicklung.md) (German).
+
+### Layout note
+
+The files sit flat in the repository root on purpose. ComfyUI loads a custom node directory under a
+module name containing path separators, so relative imports into a sub-package cannot resolve. For
+the same reason the node module is `opencode_nodes.py` and not `nodes.py`, which would collide with
+ComfyUI's own module.
+
+## Development
+
+```
+__init__.py          ComfyUI entrypoint (comfy_entrypoint)
+opencode_nodes.py    Node definition (V3 schema)
+client.py            opencode CLI wrapper, workspace management
+tests/smoke.py       10-run stability test
+docs/entwicklung.md  Debug history and architecture decisions (German)
+```
+
+Run the smoke test after changes:
 
 ```bash
-export OPENCODE_BIN=/home/deniz/.opencode/bin/opencode
+python3 tests/smoke.py                    # default model
+python3 tests/smoke.py ollama/qwen3.5:9b  # specific model
 ```
 
-## Layout (why the files sit flat)
+Expect `result: 10/10`. The test asserts the system prompt is actually applied, so a silently
+ignored prompt fails it.
 
-ComfyUI loads a custom node directory by calling
-`importlib.util.spec_from_file_location(<path>, "<dir>/__init__.py")` and sets the module name
-to the *path* with dots escaped — e.g. `custom_nodes/comfyui-opencode`. That name contains a
-slash, so relative imports into a sub-package (`from .nodes import ...`) fail with
-`ModuleNotFoundError: No module named 'custom_nodes/comfyui-opencode.nodes'`.
+## Compatibility
 
-Consequences, both load-bearing:
+- ComfyUI v0.45.4 (V3 node schema, `comfy_api.latest`)
+- opencode v2.2.7
+- Linux (developed and tested on Fedora/Nobara with AMD ROCm)
 
-* everything is flat next to `__init__.py`, there is no `comfyui_opencode/` package folder;
-* the node module is called `opencode_nodes.py`, **not** `nodes.py`, because ComfyUI puts its
-  own `nodes` module on `sys.path` and a flat `import nodes` would resolve to that instead.
+## License
 
-## opencode v2 pitfalls this node works around
+[MIT](LICENSE)
 
-These are not documented and cost significant debugging time. If the integration ever
-breaks after an opencode upgrade, check them in this order.
+---
 
-### 1. Agents live under `agents`, not `agent`
-
-```json
-{"agents": {"comfyui-runner": {"mode": "primary", "system": "..."}}}
-```
-
-The singular `agent` key is accepted without any error and its entries are silently ignored.
-
-### 2. The agent name must not contain underscores
-
-`comfyui_runner` fails with `Agent not found`. `comfyui-runner` works.
-
-### 3. The workspace must be a git repository **with at least one commit**
-
-opencode resolves the directory to a project. Without git — and, importantly, with a git
-repository that has no commits — it falls back to the `global` project ID and the
-project-local `opencode.json` is never applied. `git init` alone is not enough; a commit is
-required. `ensure_workspace()` handles both.
-
-### 4. Call through a login shell, not directly via `subprocess`
-
-This is the subtle one. With identical arguments, identical `cwd` and an identical environment:
-
-```
-subprocess.run(['opencode', '--standalone', 'run', ...])            # -> "Agent not found"
-subprocess.run(['/bin/bash', '-lc', 'opencode --standalone run ...']) # -> works
-```
-
-The direct invocation failed 10/10, the shell invocation succeeded 10/10, over repeated
-runs. Individual environment variables (`SHELL`, `TERM`, `USER`, `PATH`), a PTY,
-`start_new_session`, cleaned `OPENCODE_PASSWORD` and passing the shell's full environment
-were all ruled out. The cause is not isolated; `_run()` therefore invokes through
-`/bin/bash -lc`.
-
-### 5. `--standalone` is required
-
-Without it the call attaches to the background service, which keeps whatever directory it
-was first started in and ignores `cwd` entirely.
-
-## Tests
-
-```bash
-python3 tests/smoke.py                       # default model
-python3 tests/smoke.py ollama/qwen3.5:9b     # specific model
-```
-
-`smoke.py` runs 10 consecutive prompts against a fresh workspace and asserts the system
-prompt was actually applied. A pass looks like `result: 10/10`.
-
-## Environment note
-
-On this machine `comfy_api.latest` fails to import inside a bare `python3` process because
-`comfy/storage.py` needs `comfy_aimdo.storage`, which is missing from the installed
-`comfy_aimdo` package. That is unrelated to this node — it affects ComfyUI globally. Node
-tests above stub that one module to exercise the node in isolation.
+Deutsch: [README.de.md](README.de.md)

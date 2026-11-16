@@ -1,13 +1,26 @@
 [project]
 name = "comfyui-opencode"
 version = "0.1.0"
-description = "ComfyUI node that runs prompts through the local opencode CLI"
+description = "ComfyUI node that runs prompts through the local opencode CLI, exposing any configured LLM as a workflow step"
+license = { text = "MIT" }
 requires-python = ">=3.10"
+dependencies = []
+readme = "README.md"
+keywords = [
+    "comfyui",
+    "comfyui-custom-node",
+    "opencode",
+    "llm",
+    "prompt-engineering",
+    "ollama",
+    "text-generation",
+]
 
 [project.urls]
-Repository = "https://github.com/dezooyi/comfyui-opencode"
+Repository = "https://github.com/Agantila/comfyui-opencode"
+Issues = "https://github.com/Agantila/comfyui-opencode/issues"
 
 [tool.comfy]
-PublisherId = "dezooyi"
-DisplayName = "comfyui-opencode"
+PublisherId = "agantila"
+DisplayName = "ComfyUI OpenCode"
 Icon = ""
