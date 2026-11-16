@@ -228,6 +228,11 @@ damit ohne ComfyUI testbar (`tests/smoke.py`). Die `comfy_api`-Imports stehen in
 
 ## Offene Punkte
 
+- **Der Workspace ist geteilter Zustand.** Seed und System-Prompt landen in derselben
+  `opencode.json`. ComfyUI führt Prompts seriell aus, deshalb ist das im Normalbetrieb
+  unkritisch. Zwei ComfyUI-Instanzen mit demselben `OPENCODE_WORKSPACE` würden sich aber
+  gegenseitig überschreiben. Abhilfe wäre ein eigener Workspace pro Instanz über
+  `OPENCODE_WORKSPACE`.
 - **Wurzelursache Phase 5 unklar.** Sollte opencode eine Version liefern, in der der
   direkte `subprocess`-Aufruf funktioniert, kann der `bash -lc`-Umweg entfernt werden.
   Verifikation: `tests/smoke.py` mit direkter Invocation.
