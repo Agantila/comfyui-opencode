@@ -137,6 +137,37 @@ EXECUTE OK: 'A cozy domestic photograph of a fluffy gray tabby cat ...'
 **Lehre für künftige Nodes:** Immer `init_extra_nodes()` in der ComfyUI-venv aufrufen und
 `NODE_CLASS_MAPPINGS` prüfen. Ein Import-Test mit eigener `spec`-Konstruktion beweist nichts.
 
+### Phase 8 — `opencode CLI not found` im ComfyUI-Prozess
+
+Nach dem Neustart kein Import-Fehler mehr, aber die Node fehlte weiterhin:
+
+```
+Error while calling comfy_entrypoint in .../comfyui-opencode:
+opencode CLI not found. Install it from https://opencode.ai or set OPENCODE_BIN.
+```
+
+Der Aufruf kam von `define_schema()`, das die Modellliste über `opencode models` zieht. Der
+Grund: Der ComfyUI-Prozess (PID 369220) hat kein `~/.opencode/bin` im PATH — 16 Pfade, aber
+nicht dieser. Gestartet wurde aus einer Umgebung, die die rc-Dateien nicht geladen hat.
+
+Wichtig: Der Fehler trat in `define_schema()` auf, nicht in `execute()`. Scheitert das Schema,
+verschwindet die ganze Node — deshalb war sie unsichtbar statt nur „funktionslos".
+
+Lösung: `_binary()` prüft `OPENCODE_BIN`, dann `PATH`, dann eine Kandidatenliste
+(`~/.opencode/bin`, `~/.local/bin`, `~/.bun/bin`, `/usr/local/bin`, `/usr/bin`).
+
+Verifiziert mit dem **echten PATH des laufenden ComfyUI-Prozesses**:
+
+```
+PID-PATH aus /proc/369220/environ übernommen
+ERFOLG
+Kategorie: custom_nodes.comfyui-opencode
+EXECUTE OK: "A cozy domestic scene: a fluffy orange tabby cat ..."
+```
+
+**Lehre:** Umgebungstests immer mit dem PATH/Env des laufenden ComfyUI-Prozesses fahren
+(`/proc/<pid>/environ`), nicht mit der eigenen Shell. Die eigene Shell hat immer mehr Pfade.
+
 ## Architekturentscheidungen
 
 **Fester Workspace statt Temp-Verzeichnis.** Jeder Lauf ein `mkdtemp` hätte pro ComfyUI-

@@ -14,18 +14,36 @@ DEFAULT_WORKSPACE = os.path.join(
 DEFAULT_TIMEOUT = 300
 AGENT_NAME = "comfyui-runner"
 
+# ComfyUI is usually started from a shell that does not source the user's rc files,
+# so ~/.opencode/bin is frequently missing from PATH even though the CLI is installed.
+BINARY_CANDIDATES = (
+    "~/.opencode/bin/opencode",
+    "~/.local/bin/opencode",
+    "~/.bun/bin/opencode",
+    "/usr/local/bin/opencode",
+    "/usr/bin/opencode",
+)
+
 
 def workspace_dir():
     return os.environ.get(WORKSPACE_ENV) or DEFAULT_WORKSPACE
 
 
 def _binary():
-    binary = os.environ.get("OPENCODE_BIN") or shutil.which("opencode")
-    if not binary:
-        raise RuntimeError(
-            "opencode CLI not found. Install it from https://opencode.ai or set OPENCODE_BIN."
-        )
-    return binary
+    override = os.environ.get("OPENCODE_BIN")
+    if override:
+        return override
+    found = shutil.which("opencode")
+    if found:
+        return found
+    for candidate in BINARY_CANDIDATES:
+        path = os.path.expanduser(candidate)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    raise RuntimeError(
+        "opencode CLI not found. Install it from https://opencode.ai or set OPENCODE_BIN "
+        "to its absolute path (e.g. /home/<user>/.opencode/bin/opencode)."
+    )
 
 
 def _run(args, timeout, cwd):

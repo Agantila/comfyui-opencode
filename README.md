@@ -39,7 +39,20 @@ Each call writes an agent definition into a reusable workspace and runs
 `text` parts are concatenated; reasoning blocks and tool events are ignored.
 
 Workspace: `~/.cache/comfyui-opencode/workspace` (override with `OPENCODE_WORKSPACE`).
-Binary override: `OPENCODE_BIN`.
+Binary override: `OPENCODE_BIN` (absolute path).
+
+### opencode not found
+
+ComfyUI often runs from a shell that never sourced your rc files, so `~/.opencode/bin` is
+missing from the process `PATH` even though `opencode` works in your terminal. The node
+therefore falls back to searching the usual install locations
+(`~/.opencode/bin`, `~/.local/bin`, `~/.bun/bin`, `/usr/local/bin`, `/usr/bin`).
+
+If it still cannot find the CLI, set the absolute path in the ComfyUI environment:
+
+```bash
+export OPENCODE_BIN=/home/deniz/.opencode/bin/opencode
+```
 
 ## Layout (why the files sit flat)
 
