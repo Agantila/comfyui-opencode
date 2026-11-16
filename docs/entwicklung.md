@@ -204,6 +204,29 @@ Umsetzung: `_split_model_ref()` zerlegt `provider/model#variant` in Provider und
 unter `providers.<provider>.models.<model>.body.seed`. `seed = -1` schreibt den Block gar nicht —
 für Provider, die unbekannte Body-Felder ablehnen.
 
+Abschlussmessung über die Node (4 Läufe, Seed 42, keine Fremdeingriffe):
+
+```
+run 0 -> 'Sylaris'   run 1 -> 'Sylaris'
+run 2 -> 'Sylaris'   run 3 -> 'Sylaris'
+ALLE GLEICH: True
+```
+
+`tests/seed.py` (ausgeliefert) bestätigt: `seed 42: 'Sylaris' / 'Sylaris'`, `seed 7: 'Valdorn'`.
+
+Zwischenmessung mit einem Ausreißer (`seed 7 -> Valdorn` / `Vaelith`) erklärte sich durch einen
+eigenen Fehler: während der Test lief, hatte ich mit einem zweiten Aufruf `ensure_workspace()`
+die `opencode.json` und damit den Seed des laufenden Prozesses überschrieben. Das ist kein
+opencode-Problem, sondern die in „Offene Punkte" beschriebene Eigenschaft des geteilten
+Workspace.
+
+Gegenprobe direkt gegen Ollama (ohne opencode) zeigt, dass der Seed dort sauber wirkt:
+
+```
+seed=42 -> Kaelith   (3×)
+seed=7  -> Oryndor   (3×)
+```
+
 **Lehre:** Ein Eingang, der beim Standardmodell wirkungslos ist, muss das auch sagen. Deshalb
 steht die Provider-Tabelle im README und `tests/seed.py` prüft das konkrete Modell.
 
